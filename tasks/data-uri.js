@@ -35,6 +35,9 @@ module.exports = function (grunt) {
             destDir = path.resolve(this.data.dest),
             haystack = [];
 
+        var imageExtensions = options.imageExtensions ? options.imageExtensions : ['jpg','png','gif'];
+        var imageExtensionRegex = createImgExtensionRegex(imageExtensions);
+
         expandFiles(options.target).forEach(function (imgPath) {
             haystack.push(path.resolve(imgPath));
         });
@@ -70,6 +73,11 @@ module.exports = function (grunt) {
             // Exclude external http resource
             uris = uris.filter(function (u) {
                 return !u.match('(data:|http)');
+            });
+
+            // Exclude non image extensions
+            uris = uris.filter(function (u) {
+                return u.match(imageExtensionRegex);
             });
 
             grunt.log.subhead('SRC: ' + uris.length + ' file uri found on ' + src);
@@ -116,6 +124,19 @@ module.exports = function (grunt) {
             grunt.log.ok('=> ' + outputTo);
         });
     });
+
+    /**
+     *
+     * @param imageExtensions
+     * @returns {*|string}
+     */
+    function createImgExtensionRegex(imageExtensions){
+        if(imageExtensions.length == 0){
+            return [];
+        }
+        imageExtensions[0] = '\\.' + imageExtensions[0];
+        return imageExtensions.join('|\\.');
+    }
 
     /**
      * @param fullPath
