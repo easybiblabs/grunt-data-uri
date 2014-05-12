@@ -86,17 +86,23 @@ module.exports = function(grunt) {
 
         // Assume file existing cause found from haystack
         if (haystack.indexOf(needle) !== -1) {
-          // Encoding to Data uri
-          replacement = datauri(needle);
-
-          grunt.log.ok('Encode: '+needle);
+            // check if file exceeds the max bytes
+            var fileSize = getFileSize(needle);
+            if (options.maxBytes && fileSize > options.maxBytes) {
+            // file is over the max size
+               grunt.log.ok('Skipping (size ' + fileSize + ' > ' + options.maxBytes +'): ' + uri);
+            } else {
+                // Encoding to Data uri
+                replacement = datauri(needle);
+                grunt.log.ok('Encode: '+needle);
+            }
         } else {
           if (options.fixDirLevel) {
             // Diff of directory level
             replacement = adjustDirectoryLevel(fixedUri, destDir, baseDir);
             grunt.log.ok('Adjust: '+ uri + ' -> ' + replacement);
           } else {
-            replacement = u;
+            replacement = uri;
             grunt.log.ok('Ignore: '+ uri);
           }
         }
@@ -110,6 +116,23 @@ module.exports = function(grunt) {
       grunt.log.ok('=> ' + outputTo);
     });
   });
+
+    /**
+    * @param fullPath
+    * @param options
+    * @return {boolean} the file size, or undefined if not found
+    */
+    function getFileSize(fullPath) {
+        if (!fs.existsSync(fullPath)) {
+            return false;
+        }
+
+        var stats = fs.statSync(fullPath);
+        if (!stats.isFile()) {
+            return false;
+        }
+        return stats.size;
+    }
 
   /**
    * @method adjustDirectoryLevel
