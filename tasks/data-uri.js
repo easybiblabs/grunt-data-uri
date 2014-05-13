@@ -26,12 +26,11 @@ module.exports = function (grunt) {
             destDir = path.resolve(this.data.dest),
             imageFiles = [];
 
-        options.imageExtensions = options.imageExtensions ? options.imageExtensions : ['jpg','png','gif'];
+        options.imageExtensions = options.imageExtensions ? options.imageExtensions : ['jpg', 'png', 'gif'];
         options.imageExtensionRegex = options.imageExtensionRegex ? options.imageExtensionRegex : createImgExtensionRegex(options.imageExtensions);
         options.maxBytes = options.maxBytes ? options.maxBytes : '2048';
 
         grunt.file.expand({filter: 'isFile'}, options.target).forEach(function (imgPath) {
-            grunt.log.ok('path ' + path.resolve(imgPath));
             imageFiles.push(path.resolve(imgPath));
         });
 
@@ -79,41 +78,39 @@ module.exports = function (grunt) {
 
             // Process urls
             uris.forEach(function (uri) {
-                var replacement,
-                    needle,
-                    fixedUri = fixUri(uri);
+                var fixedUri = uri;
 
-                // Resolve image realpath
-                needle = path.resolve(fixedUri);
+                var toFix = ['/', './', '../'];
+                toFix.forEach(function (start) {
+                    if (uri.substring(0, start.length) == start) {
+                        fixedUri = uri.substring(start.length);
+                    }
+                });
 
-                // Assume file existing cause found from haystack
-                if (imageFiles.indexOf(needle) !== -1) {
-                    // check if file exceeds the max bytes
-                    replacement = needle;
-                } else {
-                    // Diff of directory level
-                    replacement = adjustDirectoryLevel(fixedUri, destDir, baseDir);
-                    grunt.log.ok('Adjust: ' + fixedUri + ' -> ' + replacement);
+                var found = {'score': '9999', 'path': uri};
+                //grunt.log.ok('needle ' + needle);
+                imageFiles.forEach(function (imgPath) {
+                    if (imgPath.indexOf(fixedUri) !== -1) {
+                        var similarityScore = imgPath.replace(fixedUri, '').length;
+                        if (found.score > similarityScore) {
+                            found.score = similarityScore;
+                            found.path = imgPath;
+                        }
+                    }
+                });
+
+                var fileSize = getFileSize(found.path);
+                if (!fileSize) {
+                    grunt.log.warn('file not found. ' + found.path);
                 }
 
-                var fileSize = getFileSize(replacement);
-                grunt.log.ok('filesize: ' + fileSize);
-                if (!fileSize){
-                    grunt.log.warn('file not found. ' + replacement);
-                    replacement = false;
-                }
-
-                if(fileSize > options.maxBytes) {
+                if (fileSize > options.maxBytes) {
                     // file is over the max size
-                    grunt.log.warn('Skipping (size ' + fileSize + ' > ' + options.maxBytes + '): ' + replacement);
-                    replacement = false;
-                }
-
-                if(replacement){
+                    grunt.log.warn('Skipping (size ' + fileSize + ' > ' + options.maxBytes + '): ' + found.path);
+                } else {
                     // Encoding to Data uri
-                    grunt.log.ok('Encode: ' + replacement);
-                    replacement = datauri(replacement);
-                    content = content.replace(new RegExp(uri, 'g'), replacement);
+                    grunt.log.ok('Encode: ' + found.path);
+                    content = content.replace(new RegExp(uri, 'g'), datauri(found.path));
                 }
             });
 
@@ -129,8 +126,8 @@ module.exports = function (grunt) {
      * @param imageExtensions
      * @returns {*|string}
      */
-    function createImgExtensionRegex(imageExtensions){
-        if(imageExtensions.length == 0){
+    function createImgExtensionRegex(imageExtensions) {
+        if (imageExtensions.length == 0) {
             return [];
         }
         imageExtensions[0] = '\\.' + imageExtensions[0];
@@ -139,7 +136,6 @@ module.exports = function (grunt) {
 
     /**
      * @param fullPath
-     * @param options
      * @return {boolean} the file size, or undefined if not found
      */
     function getFileSize(fullPath) {
@@ -152,44 +148,5 @@ module.exports = function (grunt) {
             return false;
         }
         return stats.size;
-    }
-
-    /**
-     * @method adjustDirectoryLevel
-     * @param {String} relativePath
-     * @param {String} toDir
-     * @param {String} fromDir
-     * @return {String} resolvedPath
-     */
-    function adjustDirectoryLevel(relativePath, toDir, fromDir) {
-        // fix ../path/to/img.jpg to path/to/img.jpg
-        var resolvedPath = relativePath.replace(/^\.\//, '');
-
-        if (toDir === fromDir) {
-            // both toDir and fromDir are same base.
-        }
-        else if (fromDir.indexOf(toDir) === 0) {
-            // fromDir is shallow than toDir
-            path.relative(fromDir, toDir).split('/').forEach(function () {
-                resolvedPath = resolvedPath.replace(/^\.\.\//, '');
-            });
-        }
-        else if (toDir.indexOf(fromDir) === 0) {
-            // toDir is depp than fromDir
-            path.relative(fromDir, toDir).split('/').forEach(function () {
-                resolvedPath = '../' + resolvedPath;
-            });
-        }
-
-        return resolvedPath;
-    }
-
-    function fixUri(uri){
-        // fixed current dir when specified uri is like root
-        if(uri.indexOf('/') === 0){
-            return '.' + uri;
-        }
-
-        return uri;
     }
 };
