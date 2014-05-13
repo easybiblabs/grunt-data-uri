@@ -22,9 +22,9 @@ module.exports = function (grunt) {
         // @memo this.file(0.3.x), this.files(0.4.0a) -> safe using this.data.src|dest
 
         var options = this.data.options,
-            srcFiles = grunt.file.expand({filter: 'isFile'}, this.data.src),
+            cssFiles = grunt.file.expand({filter: 'isFile'}, this.data.src),
             destDir = path.resolve(this.data.dest),
-            haystack = [];
+            imageFiles = [];
 
         options.imageExtensions = options.imageExtensions ? options.imageExtensions : ['jpg','png','gif'];
         options.imageExtensionRegex = options.imageExtensionRegex ? options.imageExtensionRegex : createImgExtensionRegex(options.imageExtensions);
@@ -32,12 +32,12 @@ module.exports = function (grunt) {
 
         grunt.file.expand({filter: 'isFile'}, options.target).forEach(function (imgPath) {
             grunt.log.ok('path ' + path.resolve(imgPath));
-            haystack.push(path.resolve(imgPath));
+            imageFiles.push(path.resolve(imgPath));
         });
 
-        grunt.log.ok('haystack size ' + haystack.length);
+        grunt.log.ok('imageFiles ' + imageFiles.length);
 
-        srcFiles.forEach(function (src) {
+        cssFiles.forEach(function (src) {
             var content = grunt.file.read(src),
                 matches = content.match(new RegExp(RE_CSS_URLFUNC.source, 'g')),
                 outputTo = destDir + '/' + path.basename(src),
@@ -87,7 +87,7 @@ module.exports = function (grunt) {
                 needle = path.resolve(fixedUri);
 
                 // Assume file existing cause found from haystack
-                if (haystack.indexOf(needle) !== -1) {
+                if (imageFiles.indexOf(needle) !== -1) {
                     // check if file exceeds the max bytes
                     replacement = needle;
                 } else {
