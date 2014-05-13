@@ -16,31 +16,26 @@ module.exports = function (grunt) {
 
     var RE_CSS_URLFUNC = /(?:url\(["']?)(.*?)(?:["']?\))/,
         util = grunt.util || grunt.utils, // for 0.4.0
-        gruntfileDir = path.resolve('./'),
-        expandFiles;
-
-    if (grunt.file.expandFiles) {
-        expandFiles = grunt.file.expandFiles;
-    } else {
-        expandFiles = function (files) {
-            return grunt.file.expand({filter: 'isFile'}, files);
-        };
-    }
+        gruntfileDir = path.resolve('./');
 
     grunt.registerMultiTask('dataUri', 'Convert your css file image path!!', function () {
         // @memo this.file(0.3.x), this.files(0.4.0a) -> safe using this.data.src|dest
 
-        var options = this.options ? this.options() : this.data.options, // for 0.4.0
-            srcFiles = expandFiles(this.data.src),
+        var options = this.data.options,
+            srcFiles = grunt.file.expand({filter: 'isFile'}, this.data.src),
             destDir = path.resolve(this.data.dest),
             haystack = [];
 
-        var imageExtensions = options.imageExtensions ? options.imageExtensions : ['jpg','png','gif'];
-        var imageExtensionRegex = createImgExtensionRegex(imageExtensions);
+        options.imageExtensions = options.imageExtensions ? options.imageExtensions : ['jpg','png','gif'];
+        options.imageExtensionRegex = options.imageExtensionRegex ? options.imageExtensionRegex : createImgExtensionRegex(options.imageExtensions);
+        options.maxBytes = options.maxBytes ? options.maxBytes : '2048';
 
-        expandFiles(options.target).forEach(function (imgPath) {
+        grunt.file.expand({filter: 'isFile'}, options.target).forEach(function (imgPath) {
+            grunt.log.ok('path ' + path.resolve(imgPath));
             haystack.push(path.resolve(imgPath));
         });
+
+        grunt.log.ok('haystack size ' + haystack.length);
 
         srcFiles.forEach(function (src) {
             var content = grunt.file.read(src),
@@ -77,17 +72,16 @@ module.exports = function (grunt) {
 
             // Exclude non image extensions
             uris = uris.filter(function (u) {
-                return u.match(imageExtensionRegex);
+                return u.match(options.imageExtensionRegex);
             });
 
             grunt.log.subhead('SRC: ' + uris.length + ' file uri found on ' + src);
 
             // Process urls
             uris.forEach(function (uri) {
-                var src, replacement, needle, fixedUri;
-
-                // fixed current dir when specified uri is like root
-                fixedUri = uri.indexOf('/') === 0 ? '.' + uri : uri;
+                var replacement,
+                    needle,
+                    fixedUri = fixUri(uri);
 
                 // Resolve image realpath
                 needle = path.resolve(fixedUri);
@@ -95,27 +89,32 @@ module.exports = function (grunt) {
                 // Assume file existing cause found from haystack
                 if (haystack.indexOf(needle) !== -1) {
                     // check if file exceeds the max bytes
-                    var fileSize = getFileSize(needle);
-                    if (options.maxBytes && fileSize > options.maxBytes) {
-                        // file is over the max size
-                        grunt.log.ok('Skipping (size ' + fileSize + ' > ' + options.maxBytes + '): ' + uri);
-                    } else {
-                        // Encoding to Data uri
-                        replacement = datauri(needle);
-                        grunt.log.ok('Encode: ' + needle);
-                    }
+                    replacement = needle;
                 } else {
-                    if (options.fixDirLevel) {
-                        // Diff of directory level
-                        replacement = adjustDirectoryLevel(fixedUri, destDir, baseDir);
-                        grunt.log.ok('Adjust: ' + uri + ' -> ' + replacement);
-                    } else {
-                        replacement = uri;
-                        grunt.log.ok('Ignore: ' + uri);
-                    }
+                    // Diff of directory level
+                    replacement = adjustDirectoryLevel(fixedUri, destDir, baseDir);
+                    grunt.log.ok('Adjust: ' + fixedUri + ' -> ' + replacement);
                 }
 
-                content = content.replace(new RegExp(uri, 'g'), replacement);
+                var fileSize = getFileSize(replacement);
+                grunt.log.ok('filesize: ' + fileSize);
+                if (!fileSize){
+                    grunt.log.warn('file not found. ' + replacement);
+                    replacement = false;
+                }
+
+                if(fileSize > options.maxBytes) {
+                    // file is over the max size
+                    grunt.log.warn('Skipping (size ' + fileSize + ' > ' + options.maxBytes + '): ' + replacement);
+                    replacement = false;
+                }
+
+                if(replacement){
+                    // Encoding to Data uri
+                    grunt.log.ok('Encode: ' + replacement);
+                    replacement = datauri(replacement);
+                    content = content.replace(new RegExp(uri, 'g'), replacement);
+                }
             });
 
             // Revert base to gruntjs executing current dir
@@ -181,7 +180,16 @@ module.exports = function (grunt) {
                 resolvedPath = '../' + resolvedPath;
             });
         }
+
         return resolvedPath;
     }
 
+    function fixUri(uri){
+        // fixed current dir when specified uri is like root
+        if(uri.indexOf('/') === 0){
+            return '.' + uri;
+        }
+
+        return uri;
+    }
 };
